@@ -346,9 +346,13 @@ module MiniFB
     # * app_id - the connect applications app_id (some users may find they have to use their facebook API key)
     # * secret - the connect application secret
     # * cookies - the cookies given by facebook - it is ok to just pass all of the cookies, the method will do the filtering for you.
-    def MiniFB.parse_cookie_information(app_id, cookies)
-        return nil if cookies["fbs_#{app_id}"].nil?
-        Hash[*cookies["fbs_#{app_id}"].split('&').map { |v| v.gsub('"', '').split('=', 2) }.flatten]
+    def MiniFB.parse_cookie_information(app_id, secret, cookies)
+      return nil if cookies["fbsr_#{app_id}"].nil?
+      sig, payload = cookies["fbsr_#{app_id}"].split(".")
+      data = JSON.parse(base64_url_decode(payload))
+      tokens = oauth_access_token(app_id, nil, secret, code)
+      tokens = tokens.split("&").inject({}){|m, (k,v)| k = k.split("="); m[k[0]] = k[1]; m }
+      return {'uid' => data['user_id'], 'access_token' => tokens['access_token']}
     end
 
     # Validates that the cookies sent by the user are those that were set by facebook. Since your
@@ -359,7 +363,7 @@ module MiniFB
     # * secret - the connect application secret
     # * cookies - the cookies given by facebook - it is ok to just pass all of the cookies, the method will do the filtering for you.
     def MiniFB.verify_cookie_signature(app_id, secret, cookies)
-        fb_keys = MiniFB.parse_cookie_information(app_id, cookies)
+        fb_keys = MiniFB.parse_cookie_information(app_id, secret, cookies)
         return false if fb_keys.nil?
 
         signature = fb_keys.delete('sig')
